@@ -30,3 +30,21 @@ npm-debug.log*
 /platforms
 /plugins
 /www
+
+
+
+# Backend dependencies
+**/node_modules/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Backend build files
+**/dist/
+**/coverage/
+
+# Temporary files
+*.bak
+*.tmp

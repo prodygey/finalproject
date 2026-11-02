@@ -1,0 +1,226 @@
+
+/*
+  BookNest Editorial Design System
+  Purpose: Set the shared colors, typography, surfaces,
+  buttons, form controls, cards, and responsive defaults.
+*/
+
+:root {
+  --bn-cream: #f8f3eb;
+  --bn-paper: #fffdf9;
+  --bn-plum: #542d46;
+  --bn-plum-dark: #3c2032;
+  --bn-rose: #d8b7c9;
+  --bn-rose-light: #eee0e8;
+  --bn-sage: #d6d6c1;
+  --bn-ink: #302731;
+  --bn-muted: #786f77;
+  --bn-border: #e6dcd3;
+  --bn-danger: #a33d50;
+
+  --ion-font-family: "Georgia", "Times New Roman", serif;
+  --ion-color-primary: #542d46;
+  --ion-color-primary-rgb: 84, 45, 70;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: #4a273e;
+  --ion-color-primary-tint: #65415a;
+
+  --ion-color-danger: #a33d50;
+  --ion-color-danger-rgb: 163, 61, 80;
+  --ion-color-danger-contrast: #ffffff;
+  --ion-color-danger-shade: #8f3646;
+  --ion-color-danger-tint: #ad5262;
+
+  --ion-background-color: var(--bn-cream);
+  --ion-text-color: var(--bn-ink);
+}
+
+/* Base application */
+
+html,
+body,
+ion-app {
+  background: var(--bn-cream);
+  color: var(--bn-ink);
+}
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  letter-spacing: 0.01em;
+}
+
+ion-content {
+  --background: var(--bn-cream);
+  --color: var(--bn-ink);
+}
+
+ion-toolbar {
+  --background: var(--bn-paper);
+  --color: var(--bn-plum);
+  --border-color: var(--bn-border);
+}
+
+ion-title {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--bn-plum);
+  font-family: Georgia, "Times New Roman", serif;
+  letter-spacing: -0.025em;
+}
+
+h1 {
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+  line-height: 1.15;
+}
+
+h2 {
+  font-size: 1.5rem;
+}
+
+p {
+  line-height: 1.65;
+}
+
+/* Buttons */
+
+ion-button {
+  --border-radius: 12px;
+  --box-shadow: none;
+  font-family: Arial, Helvetica, sans-serif;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+ion-button.button-solid {
+  --background: var(--bn-plum);
+  --background-hover: var(--bn-plum-dark);
+  --background-activated: var(--bn-plum-dark);
+  --color: #ffffff;
+}
+
+ion-button.button-outline {
+  --border-color: var(--bn-border);
+  --color: var(--bn-plum);
+}
+
+ion-button.button-clear {
+  --color: var(--bn-plum);
+}
+
+/* Cards */
+
+ion-card {
+  margin: 12px 0;
+  overflow: hidden;
+  border: 1px solid var(--bn-border);
+  border-radius: 18px;
+  background: var(--bn-paper);
+  box-shadow: 0 5px 18px rgb(60 32 50 / 5%);
+}
+
+ion-card-header {
+  padding-bottom: 8px;
+}
+
+ion-card-title {
+  color: var(--bn-plum);
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 700;
+}
+
+ion-card-subtitle {
+  color: var(--bn-muted);
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+ion-card-content {
+  color: var(--bn-ink);
+  line-height: 1.6;
+}
+
+/* Form controls */
+
+ion-item {
+  --background: var(--bn-paper);
+  --color: var(--bn-ink);
+  --border-color: var(--bn-border);
+  --highlight-color-focused: var(--bn-plum);
+}
+
+ion-input,
+ion-textarea,
+ion-select {
+  --background: var(--bn-paper);
+  --color: var(--bn-ink);
+  --placeholder-color: #958a92;
+  --highlight-color-focused: var(--bn-plum);
+}
+
+ion-list {
+  padding-top: 4px;
+  padding-bottom: 4px;
+  background: transparent;
+}
+
+ion-list ion-item {
+  --background: var(--bn-paper);
+  margin-bottom: 4px;
+}
+
+/* Links and small labels */
+
+a {
+  color: var(--bn-plum);
+  font-weight: 600;
+  text-decoration-color: var(--bn-rose);
+  text-underline-offset: 3px;
+}
+
+.bn-muted {
+  color: var(--bn-muted);
+}
+
+.bn-eyebrow {
+  color: var(--bn-muted);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.bn-panel {
+  padding: 20px;
+  border: 1px solid var(--bn-border);
+  border-radius: 18px;
+  background: var(--bn-paper);
+}
+
+.bn-page-heading {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.bn-error {
+  color: var(--bn-danger);
+  font-size: 0.9rem;
+}
+
+/* Responsive spacing */
+
+@media (min-width: 768px) {
+  ion-content > .ion-padding {
+    --padding-start: 28px;
+    --padding-end: 28px;
+  }
+}
