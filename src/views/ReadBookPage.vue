@@ -357,7 +357,7 @@ async function loadGenreMusic() {
     // Use the backend URL for the music file.
     const musicUrl = new URL(
       result.music.music_url,
-      'http://localhost:3000'
+      'http://192.168.1.5:3000'
     ).toString();
 
     const audio = new Audio(musicUrl);

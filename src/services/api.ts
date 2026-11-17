@@ -7,7 +7,7 @@ Purpose:
 */
 
 // Purpose: Store the API base URL in one place.
-const API_URL = 'http://localhost:3000/api';
+const API_URL = 'http://192.168.1.5:3000/api';
 
 // Purpose: Define the shape of the API response data.
 type ApiOptions = {

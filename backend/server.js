@@ -111,15 +111,17 @@ io.on('connection', (socket) => {
 });
 
 // Purpose: Start the API after confirming PostgreSQL is reachable.
+
+// Purpose: Start the API after confirming PostgreSQL is reachable.
 const PORT = Number(process.env.PORT || 3000);
 
 async function startServer() {
   try {
     await pool.query('SELECT 1');
 
-    // Important: Use server.listen instead of app.listen.
-    server.listen(PORT, () => {
-      console.log(`BookNest API running at http://localhost:${PORT}`);
+    // Listen on all network interfaces so Android devices can connect.
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`BookNest API running at http://192.168.1.5:${PORT}`);
       console.log('PostgreSQL connection successful.');
       console.log('Socket.IO server is ready.');
     });
@@ -131,3 +133,5 @@ async function startServer() {
 
 // Purpose: Run the startup procedure.
 startServer();
+
+

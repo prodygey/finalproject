@@ -295,7 +295,7 @@ import { apiRequest } from '../services/api';
 import { getToken } from '../services/session';
 
 // Change this if your backend uses another host or port.
-const SOCKET_URL = 'http://localhost:3000';
+const SOCKET_URL = 'http://192.168.1.5:3000';
 
 
 
@@ -464,12 +464,7 @@ function connectToComments() {
   });
 
   // Listen for new comments and replies.
-  commentSocket.on('comment-created', (data) => {
-  if (String(data.postId) !== postId) return;
-
-  // Reload the comments automatically when a new comment or reply arrives.
-  loadComments();
-});
+  commentSocket.on('comment-created', handleCommentCreated);
 
   commentSocket.on('connect_error', (error) => {
     console.error('Socket connection failed:', error.message);
