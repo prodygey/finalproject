@@ -224,3 +224,176 @@ a {
     --padding-end: 28px;
   }
 }
+
+
+
+
+
+
+
+
+
+/* Genre select field */
+.genre-select {
+  --background: #fffaf5;
+  --color: #43243f;
+  --placeholder-color: #9b8798;
+  --border-radius: 12px;
+  --padding-start: 14px;
+  --padding-end: 14px;
+
+  border: 1px solid #e4d6df;
+  border-radius: 12px;
+  min-height: 48px;
+}
+
+/* Genre dropdown overlay */
+ion-popover.genre-popover {
+  --width: 280px;
+  --background: #fffaf5;
+  --box-shadow: 0 12px 35px rgba(67, 36, 63, 0.16);
+}
+
+ion-popover.genre-popover::part(content) {
+  border: 1px solid #e4d6df;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* Dropdown content */
+ion-popover.genre-popover ion-content {
+  --background: #fffaf5;
+  --color: #43243f;
+}
+
+/* Dropdown options */
+ion-popover.genre-popover ion-item {
+  --background: #fffaf5;
+  --color: #43243f;
+  --border-color: #f0e5ec;
+  --background-hover: #f4eaf1;
+  --background-hover-opacity: 1;
+}
+
+/* Selected option */
+ion-popover.genre-popover ion-item.item-radio-checked {
+  --background: #efe2ed;
+  --color: #704568;
+  font-weight: 700;
+}
+
+/* Limit dropdown height */
+ion-popover.genre-popover {
+  --max-height: 350px;
+  --height: auto;
+}
+
+/* Make dropdown options scrollable */
+ion-popover.genre-popover .popover-viewport {
+  max-height: 350px;
+  overflow-y: auto !important;
+}
+
+/* Smooth scrolling */
+ion-popover.genre-popover ion-select-popover {
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+/* Dropdown scrollbar container */
+ion-popover.genre-popover {
+  --max-height: 350px;
+}
+
+/* Scrollbar appearance */
+ion-popover.genre-popover ::-webkit-scrollbar {
+  width: 6px;
+}
+
+/* Scrollbar track */
+ion-popover.genre-popover ::-webkit-scrollbar-track {
+  background: #f5edf2;
+  border-radius: 10px;
+  margin: 8px 0;
+}
+
+/* Scrollbar thumb */
+ion-popover.genre-popover ::-webkit-scrollbar-thumb {
+  background: #b99ab4;
+  border-radius: 10px;
+}
+
+/* Scrollbar when hovered */
+ion-popover.genre-popover ::-webkit-scrollbar-thumb:hover {
+  background: #704568;
+}
+
+/* Firefox scrollbar */
+ion-popover.genre-popover * {
+  scrollbar-width: thin;
+  scrollbar-color: #b99ab4 #f5edf2;
+}
+
+/* FORCE BookNest dropdown styling */
+ion-popover.genre-popover {
+  --background: #fffaf5 !important;
+  --border-radius: 16px !important;
+}
+
+/* Select popover component */
+ion-popover.genre-popover ion-select-popover {
+  --background: #fffaf5 !important;
+  --color: #43243f !important;
+  --border-color: #f0e5ec !important;
+}
+
+/* Remove default item borders */
+ion-popover.genre-popover ion-select-popover {
+  --inner-border-width: 0 !important;
+  --border-width: 0 !important;
+  --ion-item-border-color: #f0e5ec !important;
+}
+
+/* Style the dropdown options */
+ion-popover.genre-popover ion-select-popover ion-item {
+  --background: #fffaf5 !important;
+  --color: #43243f !important;
+  --border-color: #f0e5ec !important;
+  --inner-border-width: 0 !important;
+  --border-width: 0 !important;
+}
+
+/* Selected option */
+ion-popover.genre-popover ion-select-popover ion-item.item-radio-checked {
+  --background: #efe2ed !important;
+  --color: #704568 !important;
+}
+
+
+
+
+/* BookNest dropdown - override global ion-item styles */
+ion-popover.genre-popover ion-select-popover ion-item {
+  --background: #fffaf5 !important;
+  --color: #43243f !important;
+
+  /* Replace dark borders with subtle separators */
+  --border-color: #f0e5ec !important;
+  --inner-border-width: 0 0 1px 0 !important;
+  --border-width: 0 !important;
+
+  --highlight-color-focused: #704568 !important;
+}
+
+/* Remove unwanted native item borders and shadows */
+ion-popover.genre-popover ion-select-popover ion-item::part(native) {
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Selected option */
+ion-popover.genre-popover ion-select-popover ion-item.item-radio-checked {
+  --background: #efe2ed !important;
+  --color: #704568 !important;
+  font-weight: 700;
+}

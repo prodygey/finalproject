@@ -1,8 +1,9 @@
+
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'io.ionic.starter',
-  appName: 'howpad',
+  appId: 'com.booknest.app',
+  appName: 'BookNest',
   webDir: 'dist'
 };
 

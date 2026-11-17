@@ -18,7 +18,7 @@
         </button>
 
         <nav class="header-nav">
-          <button class="nav-link" @click="goToFeed">Feed</button>
+          <button class="nav-link" @click="goToFeed">Community</button>
           <button class="nav-link" @click="goToDiscover">Discover</button>
           <button class="nav-link active">Write</button>
           <button class="nav-link" @click="goToLibrary">My Library</button>
@@ -84,7 +84,7 @@
               </div>
             </div>
 
-            <form @submit.prevent="createBook">
+            <form @submit.prevent="isEditMode ? updateBook() : createBook()">
               <div class="field-group">
                 <label for="book-title">Book title <span>*</span></label>
                 <ion-input
@@ -93,7 +93,7 @@
                   placeholder="Enter your book title"
                   fill="outline"
                   required
-                  :disabled="!!createdBookId || loading"
+                  :disabled="loading || savingBook"
                 />
               </div>
 
@@ -106,22 +106,38 @@
                   fill="outline"
                   :auto-grow="true"
                   :rows="4"
-                  :disabled="!!createdBookId || loading"
+                  :disabled="loading || savingBook"
                 />
                 <span class="field-hint">
                   Give readers a reason to open your book.
                 </span>
               </div>
 
+
+
+              
+
+
+
+
               <div class="field-group">
                 <label for="book-genre">Genre</label>
-                <ion-input
-                  id="book-genre"
-                  v-model="genre"
-                  placeholder="e.g. Romance, Fantasy, Mystery"
-                  fill="outline"
-                  :disabled="!!createdBookId || loading"
-                />
+
+                <ion-select id="book-genre" v-model="genre" placeholder="Choose a genre" interface="popover" :interface-options="{ cssClass: 'genre-popover' }"
+                  class="genre-select" :disabled="loading || savingBook">
+                  <ion-select-option value="Romance">Romance</ion-select-option>
+                  <ion-select-option value="Fantasy">Fantasy</ion-select-option>
+                  <ion-select-option value="Mystery">Mystery</ion-select-option>
+                  <ion-select-option value="Horror">Horror</ion-select-option>
+                  <ion-select-option value="Science Fiction">Science Fiction</ion-select-option>
+                  <ion-select-option value="Adventure">Adventure</ion-select-option>
+                  <ion-select-option value="Drama">Drama</ion-select-option>
+                  <ion-select-option value="Comedy">Comedy</ion-select-option>
+                  <ion-select-option value="Thriller">Thriller</ion-select-option>
+                  <ion-select-option value="Historical Fiction">Historical Fiction</ion-select-option>
+                  <ion-select-option value="Young Adult">Young Adult</ion-select-option>
+                  <ion-select-option value="Poetry">Poetry</ion-select-option>
+                </ion-select>
               </div>
 
               <div class="field-group">
@@ -131,7 +147,9 @@
                   v-model="status"
                   fill="outline"
                   interface="popover"
-                  :disabled="!!createdBookId || loading"
+                  :interface-options="{ cssClass: 'genre-popover'}"
+                  class="genre-select"
+                  :disabled="loading || savingBook"
                 >
                   <ion-select-option value="draft">Draft — Only for editing</ion-select-option>
                   <ion-select-option value="published">Published — Available to readers</ion-select-option>
@@ -150,28 +168,21 @@
                 </div>
               </div>
 
-              <button
-                v-if="!createdBookId"
-                type="submit"
-                class="primary-button full-button"
-                :disabled="loading || !title.trim()"
-              >
-                <ion-spinner v-if="loading" name="crescent" />
+              <button type="submit" class="primary-button full-button"
+                :disabled="loading || savingBook || !title.trim()">
+                <ion-spinner v-if="loading || savingBook" name="crescent" />
                 <template v-else>
-                  Create book
-                  <ion-icon :icon="arrowForwardOutline" />
+                  <ion-icon :icon="saveOutline" />
+                  {{ isEditMode ? 'Save book changes' : 'Create book' }}
                 </template>
               </button>
 
-              <button
-                v-else
-                type="button"
-                class="secondary-button full-button"
-                @click="startNewBook"
+              <!--<button
+                v-if="createdBookId && !isEditMode"
               >
                 <ion-icon :icon="addOutline" />
                 Start another book
-              </button>
+              </button>-->
             </form>
           </section>
 
@@ -199,7 +210,7 @@
               </p>
             </div>
 
-            <form v-else @submit.prevent="createChapter">
+            <form v-else @submit.prevent="editingChapterId ? updateChapter() : createChapter()">
               <div class="chapter-book-banner">
                 <ion-icon :icon="bookOutline" />
                 <div>
@@ -256,16 +267,36 @@ Let the words flow. You can add dialogue, descriptions, and the moments that mak
                 </span>
               </div>
 
-              <button
-                type="submit"
-                class="primary-button full-button"
-                :disabled="savingChapter || !chapterTitle.trim() || !chapterContent.trim() || chapterNumber < 1"
-              >
+              <button type="submit" class="primary-button full-button" :disabled="savingChapter ||
+                !chapterTitle.trim() ||
+                !chapterContent.trim() ||
+                chapterNumber < 1
+                ">
                 <ion-spinner v-if="savingChapter" name="crescent" />
                 <template v-else>
                   <ion-icon :icon="saveOutline" />
-                  Save chapter
+                  {{ editingChapterId ? 'Update chapter' : 'Save chapter' }}
                 </template>
+              </button>
+
+             <!-- Return to Discover after creating a book -->
+              <button v-if="createdBookId && !isEditMode" type="button" class="secondary-button full-button"
+                @click="goToDiscover">
+                <ion-icon :icon="arrowBackOutline" />
+                Back to Discover
+              </button>
+
+
+              <!-- Return to the author's profile -->
+              <button v-if="isEditMode" type="button" class="secondary-button full-button"
+                @click="router.push('/profile')">
+                <ion-icon :icon="arrowBackOutline" />
+                Back to My Profile
+              </button>
+
+              <button v-if="editingChapterId" type="button" class="secondary-button full-button"
+                @click="cancelChapterEdit">
+                Cancel editing
               </button>
 
               <p class="chapter-note">
@@ -274,6 +305,36 @@ Let the words flow. You can add dialogue, descriptions, and the moments that mak
                 whether draft chapters are visible to readers.
               </p>
             </form>
+
+
+            <!-- Existing chapter management list -->
+            <div v-if="createdBookId" class="existing-chapters">
+              <div class="existing-chapters-heading">
+                <h3>Existing chapters</h3>
+                <span>{{ chapters.length }} total</span>
+              </div>
+
+              <div v-if="chapters.length === 0" class="no-chapters">
+                No chapters have been added yet.
+              </div>
+
+              <div v-for="chapter in chapters" :key="chapter.id" class="chapter-list-item">
+                <div class="chapter-list-info">
+                  <span>CHAPTER {{ chapter.chapter_number }}</span>
+                  <strong>{{ chapter.title }}</strong>
+                </div>
+
+                <div class="chapter-list-actions">
+                  <button type="button" class="chapter-edit-button" @click="editChapter(chapter)">
+                    Edit
+                  </button>
+
+                  <button type="button" class="chapter-delete-button" @click="deleteChapter(chapter)">
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
           </section>
         </div>
 
@@ -294,8 +355,9 @@ Let the words flow. You can add dialogue, descriptions, and the moments that mak
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted} from 'vue';
 import { useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import {
   IonPage,
   IonContent,
@@ -305,6 +367,7 @@ import {
   IonSelect,
   IonSelectOption,
   IonSpinner,
+  onIonViewWillEnter,
 } from '@ionic/vue';
 import {
   bookOutline,
@@ -312,7 +375,7 @@ import {
   checkmarkOutline,
   checkmarkCircleOutline,
   alertCircleOutline,
-  arrowForwardOutline,
+  arrowBackOutline,
   addOutline,
   lockClosedOutline,
   saveOutline,
@@ -322,6 +385,61 @@ import { apiRequest } from '../services/api';
 import { getToken } from '../services/session';
 
 const router = useRouter();
+
+
+const route = useRoute();
+
+// Purpose: Determine whether the page is creating or editing a book.
+const isEditMode = computed(() => !!route.query.edit);
+const editingBookId = computed(() => {
+  const id = Number(route.query.edit);
+  return Number.isInteger(id) && id > 0 ? id : null;
+});
+
+
+
+
+// Default cover used when the writer does not upload one.
+const defaultCover = '/default-book-cover.jpg';
+
+// Stores the selected cover image for preview.
+const coverInput = ref<HTMLInputElement | null>(null);
+const coverPreview = ref<string | null>(null);
+const coverFile = ref<File | null>(null);
+
+// Opens the file picker.
+function triggerCoverUpload() {
+  coverInput.value?.click();
+}
+
+// Displays the selected cover.
+function handleCoverUpload(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+
+  if (!file) return;
+
+  if (!file.type.startsWith('image/')) {
+    message.value = 'Please select a valid image.';
+    return;
+  }
+
+  coverFile.value = file;
+  coverPreview.value = URL.createObjectURL(file);
+}
+
+// Resets the cover to the default image.
+function useDefaultCover() {
+  coverFile.value = null;
+  coverPreview.value = null;
+
+  if (coverInput.value) {
+    coverInput.value.value = '';
+  }
+}
+
+
+
 
 // Book information fields.
 const title = ref('');
@@ -336,6 +454,23 @@ const createdBookId = ref<number | null>(null);
 const chapterNumber = ref(1);
 const chapterTitle = ref('');
 const chapterContent = ref('');
+
+
+
+
+// Purpose: Store all chapters belonging to the selected book.
+type Chapter = {
+  id: number;
+  chapter_number: number;
+  title: string;
+  content: string;
+};
+
+const chapters = ref<Chapter[]>([]);
+const editingChapterId = ref<number | null>(null);
+const savingBook = ref(false);
+
+
 
 // Page status and feedback.
 const loading = ref(false);
@@ -375,6 +510,100 @@ function requireToken(): string {
   return token;
 }
 
+
+
+// Purpose: Clear the previous book details when starting a new book.
+function resetBookForm() {
+  title.value = '';
+  description.value = '';
+  genre.value = '';
+  status.value = 'draft';
+
+  createdBookId.value = null;
+  coverFile.value = null;
+  coverPreview.value = null;
+
+  editingChapterId.value = null;
+  chapterTitle.value = '';
+  chapterContent.value = '';
+
+  if (coverInput.value) {
+    coverInput.value.value = '';
+  }
+}
+
+
+// Purpose: Prepare a clean form whenever the user returns to Write.
+onIonViewWillEnter(() => {
+  const editBookId = route.query.edit;
+
+  if (!editBookId) {
+    resetBookForm();
+  }
+});
+
+
+
+
+
+// Purpose: Load an existing book and its chapters for editing.
+async function loadBookForEditing() {
+  const bookId = editingBookId.value || createdBookId.value;
+if (!bookId) return;
+
+  loading.value = true;
+  message.value = '';
+  errorMessage.value = '';
+
+  try {
+    const result = await apiRequest<{
+      book: {
+        id: number;
+        title: string;
+        description: string | null;
+        cover_url: string | null;
+        genre: string | null;
+        status: 'draft' | 'published';
+      };
+      chapters: Chapter[];
+    }>(`/books/${bookId}/manage`, {
+      token: requireToken(),
+    });
+
+    const book = result.book;
+
+    createdBookId.value = book.id;
+    title.value = book.title;
+    description.value = book.description || '';
+    genre.value = book.genre || '';
+    status.value = book.status;
+
+    chapters.value = result.chapters || [];
+
+    message.value = `You are now managing "${book.title}".`;
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error
+        ? error.message
+        : 'Could not load this book.';
+  } finally {
+    loading.value = false;
+  }
+}
+
+// Purpose: Load the selected book when the page opens in edit mode.
+onMounted(() => {
+  if (isEditMode.value) {
+    loadBookForEditing();
+  }
+});
+
+
+
+
+
+
+
 // Create the book using the existing API endpoint.
 async function createBook() {
   if (!title.value.trim()) {
@@ -410,6 +639,55 @@ async function createBook() {
   }
 }
 
+
+
+
+
+
+
+
+// Purpose: Save changes to an existing book.
+async function updateBook() {
+  if (!createdBookId.value) return;
+
+  if (!title.value.trim()) {
+    errorMessage.value = 'Please enter a book title.';
+    return;
+  }
+
+  savingBook.value = true;
+  message.value = '';
+  errorMessage.value = '';
+
+  try {
+    await apiRequest(`/books/${createdBookId.value}`, {
+      method: 'PUT',
+      token: requireToken(),
+      body: {
+        title: title.value.trim(),
+        description: description.value.trim(),
+        genre: genre.value || null,
+        status: status.value,
+      },
+    });
+
+    message.value = 'Book details updated successfully.';
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error
+        ? error.message
+        : 'Could not update your book.';
+  } finally {
+    savingBook.value = false;
+  }
+}
+
+
+
+
+
+
+
 // Save a chapter under the book created on this page.
 async function createChapter() {
   if (!createdBookId.value) {
@@ -443,6 +721,7 @@ async function createChapter() {
     });
 
     message.value = `Chapter ${chapterNumber.value} was saved successfully.`;
+    await loadBookForEditing();
 
     // Prepare the form for the next chapter.
     chapterNumber.value += 1;
@@ -455,6 +734,124 @@ async function createChapter() {
     savingChapter.value = false;
   }
 }
+
+
+
+
+// Purpose: Load a chapter into the editor so its content can be changed.
+function editChapter(chapter: Chapter) {
+  editingChapterId.value = chapter.id;
+  chapterNumber.value = chapter.chapter_number;
+  chapterTitle.value = chapter.title;
+  chapterContent.value = chapter.content;
+
+  message.value = `Editing Chapter ${chapter.chapter_number}.`;
+  errorMessage.value = '';
+}
+
+// Purpose: Save changes to an existing chapter.
+async function updateChapter() {
+  if (!createdBookId.value || !editingChapterId.value) return;
+
+  if (!chapterTitle.value.trim() || !chapterContent.value.trim()) {
+    errorMessage.value = 'Please enter both a chapter title and content.';
+    return;
+  }
+
+  if (!Number.isInteger(chapterNumber.value) || chapterNumber.value < 1) {
+    errorMessage.value = 'Chapter number must be a whole number greater than zero.';
+    return;
+  }
+
+  savingChapter.value = true;
+  message.value = '';
+  errorMessage.value = '';
+
+  try {
+    await apiRequest(
+      `/books/${createdBookId.value}/chapters/${editingChapterId.value}`,
+      {
+        method: 'PUT',
+        token: requireToken(),
+        body: {
+          chapter_number: chapterNumber.value,
+          title: chapterTitle.value.trim(),
+          content: chapterContent.value,
+        },
+      }
+    );
+
+    // Reload the chapter list to show the updated information.
+    await loadBookForEditing();
+
+    editingChapterId.value = null;
+    chapterNumber.value = chapters.value.length + 1;
+    chapterTitle.value = '';
+    chapterContent.value = '';
+
+    message.value = 'Chapter updated successfully.';
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error
+        ? error.message
+        : 'Could not update this chapter.';
+  } finally {
+    savingChapter.value = false;
+  }
+}
+
+// Purpose: Delete a chapter after the author confirms the action.
+async function deleteChapter(chapter: Chapter) {
+  if (!createdBookId.value) return;
+
+  const confirmed = window.confirm(
+    `Are you sure you want to delete Chapter ${chapter.chapter_number}: ${chapter.title}?`
+  );
+
+  if (!confirmed) return;
+
+  message.value = '';
+  errorMessage.value = '';
+
+  try {
+    await apiRequest(
+      `/books/${createdBookId.value}/chapters/${chapter.id}`,
+      {
+        method: 'DELETE',
+        token: requireToken(),
+      }
+    );
+
+    chapters.value = chapters.value.filter(
+      item => item.id !== chapter.id
+    );
+
+    if (editingChapterId.value === chapter.id) {
+      cancelChapterEdit();
+    }
+
+    message.value = 'Chapter deleted successfully.';
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error
+        ? error.message
+        : 'Could not delete this chapter.';
+  }
+}
+
+// Purpose: Clear the chapter editor and prepare a new chapter.
+function cancelChapterEdit() {
+  editingChapterId.value = null;
+  chapterNumber.value = chapters.value.length + 1;
+  chapterTitle.value = '';
+  chapterContent.value = '';
+  message.value = '';
+  errorMessage.value = '';
+}
+
+
+
+
 
 // Reset the form so another book can be created.
 function startNewBook() {
@@ -473,7 +870,7 @@ function startNewBook() {
 }
 </script>
 
-<style scoped>
+<style>
 .write-page {
   --background: #f8f4ec;
   --color: #302432;
@@ -1115,5 +1512,195 @@ function startNewBook() {
     padding: 8px 4px;
     font-size: 9px;
   }
+}
+
+
+
+
+
+
+/* Genre dropdown field */
+.genre-select {
+  --background: #fffaf5;
+  --color: #43243f;
+  --placeholder-color: #9b8798;
+  --placeholder-opacity: 1;
+
+  --border-color: #e4d6df;
+  --border-radius: 12px;
+  --border-width: 1px;
+
+  --padding-start: 14px;
+  --padding-end: 14px;
+
+  min-height: 48px;
+  border: 1px solid #e4d6df;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+/* Dropdown popover container */
+ion-popover.genre-popover {
+  --width: 280px;
+  --background: #fffaf5;
+  --box-shadow: 0 12px 35px rgba(67, 36, 63, 0.16);
+}
+
+/* Dropdown border and shape */
+ion-popover.genre-popover::part(content) {
+  border: 1px solid #e4d6df;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* Dropdown options */
+ion-popover.genre-popover ion-select-popover ion-item {
+  --background: #fffaf5;
+  --color: #43243f;
+  --min-height: 46px;
+  --border-color: #f0e5ec;
+
+  --background-hover: #f4eaf1;
+  --background-hover-opacity: 1;
+
+  font-size: 13px;
+}
+
+/* Selected option */
+ion-popover.genre-popover ion-select-popover ion-item.item-radio-checked {
+  --background: #efe2ed;
+  --color: #704568;
+  font-weight: 700;
+}
+
+/* Radio indicator */
+ion-popover.genre-popover ion-select-popover ion-radio {
+  --color: #cbb5c8;
+  --color-checked: #704568;
+}
+
+
+
+
+
+
+
+/* Existing chapter management */
+.existing-chapters {
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid #e9dfd6;
+}
+
+.existing-chapters-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.existing-chapters-heading h3 {
+  margin: 0;
+  color: #352535;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.existing-chapters-heading span {
+  color: #987d92;
+  font-size: 11px;
+}
+
+.no-chapters {
+  padding: 18px;
+  border: 1px dashed #dfd1d8;
+  border-radius: 8px;
+  color: #897986;
+  font-size: 12px;
+  text-align: center;
+}
+
+.chapter-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid #eee6e0;
+}
+
+.chapter-list-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chapter-list-info span {
+  color: #987d92;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.chapter-list-info strong {
+  overflow-wrap: anywhere;
+  color: #452e43;
+  font-size: 13px;
+}
+
+.chapter-list-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 7px;
+}
+
+.chapter-list-actions button {
+  padding: 7px 10px;
+  border: 1px solid #e4d6df;
+  border-radius: 7px;
+  background: #fffaf5;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chapter-edit-button {
+  color: #704568;
+}
+
+.chapter-delete-button {
+  border-color: #e8c7c7 !important;
+  color: #923c43;
+}
+
+
+.cover-section {
+  margin-top: 20px;
+}
+
+.cover-preview {
+  width: 150px;
+  height: 210px;
+  margin: 12px 0;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid var(--bn-border);
+  background: var(--bn-paper);
+}
+
+.cover-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 </style>

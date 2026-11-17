@@ -17,9 +17,9 @@
         </button>
 
         <nav class="header-nav">
-          <button class="nav-link" @click="goToFeed">Feed</button>
+          <button class="nav-link" @click="goToFeed">Community</button>
           <button class="nav-link" @click="goToDiscover">Discover</button>
-          <button class="nav-link" @click="goToDiscover">Write</button>
+          <button class="nav-link" @click="goToWrite">Write</button>
           <button class="nav-link active">My Library</button>
         </nav>
       </header>
@@ -193,6 +193,7 @@ import {
   IonContent,
   IonIcon,
   IonSpinner,
+  onIonViewWillEnter,
 } from '@ionic/vue';
 import {
   bookOutline,
@@ -203,6 +204,7 @@ import {
   alertCircleOutline,
   compassOutline,
   bookmarkOutline,
+  bookmark,
 } from 'ionicons/icons';
 import { apiRequest } from '../services/api';
 import { getToken } from '../services/session';
@@ -222,6 +224,14 @@ const removingBookId = ref<number | null>(null);
 
 const router = useRouter();
 
+
+
+
+// Purpose: Refresh the saved books whenever the Library page opens.
+onIonViewWillEnter(() => {
+  loadLibrary();
+});
+
 // Navigate to the main feed.
 function goToFeed() {
   router.push('/feed');
@@ -230,6 +240,10 @@ function goToFeed() {
 // Navigate to Discover.
 function goToDiscover() {
   router.push('/books');
+}
+
+function goToWrite() {
+  router.push('/write');
 }
 
 // Retrieve the logged-in user's saved books.
@@ -307,12 +321,12 @@ onMounted(loadLibrary);
 }
 
 .site-header {
-  min-height: 76px;
-  padding: 0 7%;
+  min-height: 72px;
+  padding: 0 5%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
+  gap: 20px;
   background: #fffdf8;
   border-bottom: 1px solid #e9e0d8;
 }
@@ -325,14 +339,14 @@ onMounted(loadLibrary);
   background: transparent;
   color: #512b4a;
   font-family: inherit;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 800;
   cursor: pointer;
 }
 
 .brand-icon {
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
   border-radius: 12px;
@@ -344,11 +358,11 @@ onMounted(loadLibrary);
 .header-nav {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .nav-link {
-  padding: 10px 14px;
+  padding: 10px 12px;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -368,6 +382,7 @@ onMounted(loadLibrary);
 .page-container {
   width: min(1120px, 88%);
   margin: 0 auto;
+  padding: 44px 0 70px;
 }
 
 .library-hero {
@@ -903,16 +918,21 @@ onMounted(loadLibrary);
   }
 
   .brand {
-    font-size: 19px;
+    font-size: 18px;
+  }
+
+  .brand-icon {
+    width: 34px;
+    height: 34px;
   }
 
   .header-nav {
-    gap: 2px;
+    gap: 1px;
   }
 
   .nav-link {
-    padding: 9px 7px;
-    font-size: 11px;
+    padding: 8px 6px;
+    font-size: 10px;
   }
 
   .library-hero {
@@ -926,6 +946,7 @@ onMounted(loadLibrary);
 
   .page-container {
     width: 90%;
+    padding-top: 30px;
   }
 
   .section-heading {

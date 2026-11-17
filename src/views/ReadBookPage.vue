@@ -143,6 +143,42 @@
 
           <!-- Selected chapter reading area -->
           <section v-if="selectedChapter" class="reader-section">
+
+            <!-- Background music controls -->
+<div class="music-controls">
+  <div class="music-information">
+    <span class="music-label">BOOKNEST AMBIENCE</span>
+    <span class="music-description">
+      Background music for {{ book?.genre || 'your story' }}
+    </span>
+  </div>
+
+  <!-- Show only if the browser blocks automatic playback -->
+  <button
+    v-if="needsMusicPermission"
+    class="music-button"
+    @click="enableMusic"
+  >
+    <ion-icon :icon="bookOutline" />
+    Tap to enable music
+  </button>
+
+  <!-- Mute and unmute control -->
+  <button
+    v-else
+    class="music-button"
+    @click="toggleMute"
+  >
+    <ion-icon :icon="isMuted ? volumeMuteOutline : volumeHighOutline" />
+    <!--{{ isMuted ? 'Unmute' : 'Mute' }}-->
+  </button>
+</div>
+
+
+
+
+
+
             <div class="reader-topline">
               <span class="eyebrow">NOW READING</span>
               <span class="reader-book-title">{{ book.title }}</span>
@@ -158,7 +194,24 @@
                 <span class="reader-divider"></span>
               </div>
 
-              <div class="story-text">{{ selectedChapter.content }}</div>
+              <!-- Individual selectable paragraphs -->
+              <div class="story-text">
+                <div v-for="(paragraph, index) in chapterParagraphs" :key="index" class="story-paragraph-wrapper">
+                  <!-- Select a paragraph -->
+                  <button type="button" class="story-paragraph" :class="{
+                    'paragraph-selected': selectedParagraph === paragraph
+                  }" @click="selectedParagraph = paragraph">
+                    {{ paragraph }}
+                  </button>
+
+                  <!-- Share button appears directly below the selected paragraph -->
+                  <button v-if="selectedParagraph === paragraph" type="button" class="inline-share-quote"
+                    @click="shareSelectedQuote">
+                    <ion-icon :icon="shareSocialOutline" />
+                    Share Quote
+                  </button>
+                </div>
+              </div>
 
               <div class="reader-navigation">
                 <button
@@ -198,7 +251,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { onIonViewWillLeave } from '@ionic/vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   IonPage,
@@ -214,6 +268,10 @@ import {
   listOutline,
   alertCircleOutline,
   checkmarkCircleOutline,
+  volumeOffOutline,
+  volumeHighOutline,
+  volumeMuteOutline,
+  shareSocialOutline,
 } from 'ionicons/icons';
 import { apiRequest } from '../services/api';
 
@@ -223,6 +281,7 @@ type Book = {
   title: string;
   description: string;
   author: string;
+  genre: string;
 };
 
 // Chapter information displayed in the chapter list.
@@ -244,9 +303,128 @@ const book = ref<Book | null>(null);
 const chapters = ref<ChapterSummary[]>([]);
 const selectedChapter = ref<Chapter | null>(null);
 
+
+  // The paragraph currently selected by the reader.
+const selectedParagraph = ref('');
+
+// Separate the chapter content using the line breaks entered by the writer.
+const chapterParagraphs = computed(() => {
+  if (!selectedChapter.value) return [];
+
+  return selectedChapter.value.content
+    .split(/\r?\n/)
+    .map(paragraph => paragraph.trim())
+    .filter(paragraph => paragraph.length > 0);
+});
+
+
+
+
 const errorMessage = ref('');
 const isLoading = ref(true);
 const isReading = ref(false);
+
+
+// Background music information returned by the API.
+type GenreMusic = {
+  music_title: string;
+  music_url: string;
+  genre: string;
+};
+
+// Background music player state.
+const audioPlayer = ref<HTMLAudioElement | null>(null);
+const isMuted = ref(false);
+const needsMusicPermission = ref(false);
+const musicError = ref('');
+
+// Retrieve and play music based on the book's genre.
+async function loadGenreMusic() {
+  try {
+    const id = String(route.params.id);
+
+    const result = await apiRequest<{
+      message: string;
+      music: GenreMusic;
+    }>(`/books/${id}/music`);
+
+    // Stop any previously loaded music.
+    if (audioPlayer.value) {
+      audioPlayer.value.pause();
+      audioPlayer.value = null;
+    }
+
+    // Use the backend URL for the music file.
+    const musicUrl = new URL(
+      result.music.music_url,
+      'http://localhost:3000'
+    ).toString();
+
+    const audio = new Audio(musicUrl);
+
+    audio.loop = true;
+    audio.muted = isMuted.value;
+
+    audioPlayer.value = audio;
+
+    // Attempt automatic playback.
+    try {
+      await audio.play();
+      needsMusicPermission.value = false;
+    } catch {
+      // Browser blocked autoplay.
+      needsMusicPermission.value = true;
+    }
+
+  } catch (error) {
+    console.error('Could not load genre music:', error);
+    musicError.value = 'Background music is unavailable.';
+  }
+}
+
+// Enable music after the reader taps the permission button.
+async function enableMusic() {
+  if (!audioPlayer.value) return;
+
+  try {
+    await audioPlayer.value.play();
+    needsMusicPermission.value = false;
+  } catch (error) {
+    console.error('Could not start music:', error);
+  }
+}
+
+// Toggle mute and unmute.
+function toggleMute() {
+  isMuted.value = !isMuted.value;
+
+  if (audioPlayer.value) {
+    audioPlayer.value.muted = isMuted.value;
+  }
+}
+
+// Stop music when leaving the reading page.
+onUnmounted(() => {
+  if (audioPlayer.value) {
+    audioPlayer.value.pause();
+    audioPlayer.value.src = '';
+    audioPlayer.value = null;
+  }
+});
+
+
+// Stop background music whenever the user leaves this page.
+onIonViewWillLeave(() => {
+  if (audioPlayer.value) {
+    audioPlayer.value.pause();
+    audioPlayer.value.currentTime = 0;
+    audioPlayer.value.src = '';
+    audioPlayer.value = null;
+  }
+});
+
+
+
 
 // Find the selected chapter's position in the chapter list.
 const selectedIndex = computed(() =>
@@ -269,6 +447,32 @@ function goToBooks() {
   router.push('/books');
 }
 
+
+
+// Transfer the selected quote and its book information to the Community Feed.
+function shareSelectedQuote() {
+  if (!selectedParagraph.value || !book.value || !selectedChapter.value) {
+    return;
+  }
+
+  router.push({
+    path: '/feed',
+    query: {
+      quote: selectedParagraph.value,
+      bookId: String(book.value.id),
+      bookTitle: book.value.title,
+      chapterTitle: selectedChapter.value.title,
+      chapterNumber: String(selectedChapter.value.chapter_number),
+    },
+  });
+}
+
+
+
+
+
+
+
 // Load the book and its published chapter list.
 async function loadBook() {
   isLoading.value = true;
@@ -284,6 +488,7 @@ async function loadBook() {
 
     book.value = result.book;
     chapters.value = result.chapters;
+    //await loadGenreMusic();
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : 'Could not load this book.';
@@ -299,6 +504,11 @@ async function readChapter(chapterId: number) {
   isReading.value = true;
   errorMessage.value = '';
 
+  // Load background music only when the reader starts reading.
+  if (!audioPlayer.value) {
+    await loadGenreMusic();
+  }
+
   try {
     const id = String(route.params.id);
 
@@ -307,6 +517,7 @@ async function readChapter(chapterId: number) {
     );
 
     selectedChapter.value = result.chapter;
+    selectedParagraph.value = '';
 
     // Scroll the reader into view after the chapter has loaded.
     requestAnimationFrame(() => {
@@ -1006,5 +1217,210 @@ onMounted(loadBook);
   .reader-nav-button {
     padding: 9px;
   }
+}
+
+
+/* Background music controls */
+.music-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 20px;
+  padding: 16px 20px;
+  border: 1px solid #e8ded5;
+  border-radius: 10px;
+  background: #fffdf8;
+}
+
+.music-information {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.music-label {
+  color: #916b49;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+.music-description {
+  color: #685b66;
+  font-size: 13px;
+}
+
+.music-button {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 7px;
+  background: #512b4a;
+  color: #fffaf3;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.music-button:hover {
+  background: #6b3a61;
+}
+
+@media (max-width: 500px) {
+  .music-controls {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+
+
+
+/* Selectable story paragraphs */
+.story-paragraph {
+  display: block;
+  width: 100%;
+  margin: 0 0 18px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.story-paragraph:hover {
+  background: #f5edf2;
+}
+
+.story-paragraph.paragraph-selected {
+  background: #eee1eb;
+  color: #512b4a;
+  box-shadow: inset 3px 0 0 #79516f;
+}
+
+/* Quote sharing panel */
+.quote-share-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 25px;
+  padding: 18px;
+  border: 1px solid #e6d7e2;
+  border-radius: 10px;
+  background: #f8f1f6;
+}
+
+.selected-quote-preview {
+  min-width: 0;
+}
+
+.quote-label {
+  color: #916b49;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+.selected-quote-preview p {
+  margin: 8px 0 0;
+  color: #512b4a;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 15px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.share-quote-button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: #512b4a;
+  color: #fffaf3;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.share-quote-button:hover {
+  background: #6b3a61;
+}
+
+@media (max-width: 500px) {
+  .quote-share-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .share-quote-button {
+    justify-content: center;
+  }
+}
+
+.story-paragraph-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.story-paragraph {
+  display: block;
+  width: 100%;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.story-paragraph:hover {
+  background: #f5edf2;
+}
+
+.story-paragraph.paragraph-selected {
+  background: #eee1eb;
+  color: #512b4a;
+  box-shadow: inset 3px 0 0 #79516f;
+}
+
+/* Small sharing button directly below the selected paragraph */
+.inline-share-quote {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 5px 0 0 9px;
+  padding: 7px 12px;
+  border: 1px solid #e6d7e2;
+  border-radius: 20px;
+  background: #f8f1f6;
+  color: #512b4a;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.inline-share-quote:hover {
+  background: #512b4a;
+  color: #fffaf3;
 }
 </style>

@@ -31,6 +31,107 @@ router.get('/', async (req, res) => {
   }
 });
 
+
+
+
+
+
+// Purpose: Retrieve all books owned by the logged-in user.
+router.get('/mine', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT
+          b.id,
+          b.title,
+          b.description,
+          b.cover_url,
+          b.genre,
+          b.status,
+          b.created_at,
+          b.updated_at,
+          COUNT(c.id)::INTEGER AS chapter_count
+       FROM books b
+       LEFT JOIN chapters c ON c.book_id = b.id
+       WHERE b.author_id = $1
+       GROUP BY b.id
+       ORDER BY b.created_at DESC`,
+      [req.user.id]
+    );
+
+    res.json({ books: result.rows });
+  } catch (error) {
+    console.error('Load my books error:', error.message);
+
+    res.status(500).json({
+      message: 'Could not load your books.',
+    });
+  }
+});
+
+
+
+
+
+
+// Purpose: Retrieve a book and all its chapters for its owner to manage.
+router.get('/:id/manage', authenticateToken, async (req, res) => {
+  try {
+    // Only allow the author of the book to manage it.
+    const bookResult = await pool.query(
+      `SELECT
+          id,
+          title,
+          description,
+          cover_url,
+          genre,
+          status,
+          created_at,
+          updated_at
+       FROM books
+       WHERE id = $1 AND author_id = $2`,
+      [req.params.id, req.user.id]
+    );
+
+    if (bookResult.rows.length === 0) {
+      return res.status(404).json({
+        message: 'Book not found or you do not have permission to manage it.',
+      });
+    }
+
+    // Retrieve all chapters, including their contents.
+    const chapterResult = await pool.query(
+      `SELECT
+          id,
+          chapter_number,
+          title,
+          content
+       FROM chapters
+       WHERE book_id = $1
+       ORDER BY chapter_number ASC`,
+      [req.params.id]
+    );
+
+    res.json({
+      book: bookResult.rows[0],
+      chapters: chapterResult.rows,
+    });
+  } catch (error) {
+    console.error('Load book for management error:', error.message);
+
+    res.status(500).json({
+      message: 'Could not load this book for management.',
+    });
+  }
+});
+
+
+
+
+
+
+
+
+
 // Purpose: Get one published book and its chapter list.
 router.get('/:id', async (req, res) => {
   try {
@@ -169,6 +270,54 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+
+
+
+
+// Purpose: Delete a chapter only when the authenticated user owns its book.
+router.delete(
+  '/:bookId/chapters/:chapterId',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const result = await pool.query(
+        `DELETE FROM chapters c
+         USING books b
+         WHERE c.book_id = b.id
+           AND c.id = $1
+           AND c.book_id = $2
+           AND b.author_id = $3
+         RETURNING c.id`,
+        [
+          req.params.chapterId,
+          req.params.bookId,
+          req.user.id,
+        ]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Chapter not found or you do not own this book.',
+        });
+      }
+
+      res.json({
+        message: 'Chapter deleted successfully.',
+      });
+    } catch (error) {
+      console.error('Delete chapter error:', error.message);
+
+      res.status(500).json({
+        message: 'Could not delete chapter.',
+      });
+    }
+  }
+);
+
+
+
+
+
 // Purpose: Add a chapter to a book owned by the logged-in user.
 router.post('/:id/chapters', authenticateToken, async (req, res) => {
   const client = await pool.connect();
@@ -234,6 +383,85 @@ router.post('/:id/chapters', authenticateToken, async (req, res) => {
   }
 });
 
+
+
+
+
+
+// Purpose: Update a chapter belonging to the authenticated user's book.
+router.put(
+  '/:bookId/chapters/:chapterId',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { chapter_number, title, content } = req.body;
+
+      if (
+        !Number.isInteger(Number(chapter_number)) ||
+        Number(chapter_number) < 1 ||
+        !title?.trim() ||
+        !content?.trim()
+      ) {
+        return res.status(400).json({
+          message: 'A positive chapter number, title, and content are required.',
+        });
+      }
+
+      const result = await pool.query(
+        `UPDATE chapters c
+         SET chapter_number = $1,
+             title = $2,
+             content = $3
+         FROM books b
+         WHERE c.book_id = b.id
+           AND c.id = $4
+           AND c.book_id = $5
+           AND b.author_id = $6
+         RETURNING c.id, c.book_id, c.chapter_number, c.title, c.content`,
+        [
+          Number(chapter_number),
+          title.trim(),
+          content,
+          req.params.chapterId,
+          req.params.bookId,
+          req.user.id,
+        ]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Chapter not found or you do not own this book.',
+        });
+      }
+
+      res.json({
+        message: 'Chapter updated successfully.',
+        chapter: result.rows[0],
+      });
+    } catch (error) {
+      if (error.code === '23505') {
+        return res.status(409).json({
+          message: 'That chapter number already exists for this book.',
+        });
+      }
+
+      console.error('Update chapter error:', error.message);
+
+      res.status(500).json({
+        message: 'Could not update chapter.',
+      });
+    }
+  }
+);
+
+
+
+
+
+
+
+
+
 // Purpose: Read a chapter only if its book is published.
 router.get('/:bookId/chapters/:chapterId', async (req, res) => {
   try {
@@ -255,6 +483,71 @@ router.get('/:bookId/chapters/:chapterId', async (req, res) => {
     res.status(500).json({ message: 'Could not load chapter.' });
   }
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Purpose: Retrieve background music based on the book's genre.
+router.get('/:id/music', async (req, res) => {
+    try {
+        // Get the book's genre.
+        const bookResult = await pool.query(
+            `SELECT genre
+             FROM books
+             WHERE id = $1
+             AND status = 'published'`,
+            [req.params.id]
+        );
+
+        if (bookResult.rows.length === 0) {
+            return res.status(404).json({
+                message: 'Published book not found.'
+            });
+        }
+
+        const genre = bookResult.rows[0].genre;
+
+        // Find the music assigned to that genre.
+        const musicResult = await pool.query(
+            `SELECT music_title, music_url, genre
+             FROM genre_music
+             WHERE LOWER(genre) = LOWER($1)
+             AND is_active = TRUE`,
+            [genre]
+        );
+
+        if (musicResult.rows.length === 0) {
+            return res.status(404).json({
+                message: 'No background music available for this genre.'
+            });
+        }
+
+        res.json({
+            message: 'Background music retrieved successfully.',
+            music: musicResult.rows[0]
+        });
+
+    } catch (error) {
+        console.error('Get genre music error:', error.message);
+
+        res.status(500).json({
+            message: 'Could not retrieve background music.'
+        });
+    }
+});
+
+
+
+
 
 // Purpose: Export all book-related API endpoints.
 module.exports = router;

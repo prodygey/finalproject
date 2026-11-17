@@ -23,7 +23,7 @@
         <nav class="topbar-links">
           <router-link to="/feed" class="nav-link">
             <ion-icon :icon="newspaperOutline" />
-            Feed
+            Community
           </router-link>
 
           <router-link to="/books" class="nav-link active">
@@ -43,8 +43,8 @@
         </nav>
 
         <router-link to="/login" class="account-link">
-          <ion-icon :icon="personCircleOutline" />
-          Account
+          <ion-icon :icon="logOutOutline" />
+          Logout
         </router-link>
       </header>
 
@@ -273,6 +273,7 @@ import {
   IonButton,
   IonIcon,
   IonSpinner,
+  onIonViewWillEnter,
 } from '@ionic/vue';
 
 import {
@@ -291,6 +292,12 @@ import {
   moonOutline,
   heartOutline,
   starOutline,
+  volumeMute,
+  volumeHigh,
+  volumeOffOutline,
+  volumeHighOutline,
+  volumeMuteOutline,
+  logOutOutline,
 } from 'ionicons/icons';
 
 import { apiRequest } from '../services/api';
@@ -353,6 +360,11 @@ async function loadBooks() {
     loading.value = false;
   }
 }
+
+// Purpose: Refresh Discover whenever the user returns to this page.
+onIonViewWillEnter(() => {
+  loadBooks();
+});
 
 // Navigate to the selected book's details and reading page.
 async function readBook(id: number) {

@@ -11,6 +11,7 @@ import WriteBookPage from '../views/WriteBookPage.vue';
 import CommentsPage from '../views/CommentsPage.vue';
 import LibraryPage from '../views/LibraryPage.vue';
 import AdminPage from '../views/AdminPage.vue';
+import ProfilePage from '../views/ProfilePage.vue';
 
 const routes: Array<RouteRecordRaw> = [
 {
@@ -53,6 +54,12 @@ const routes: Array<RouteRecordRaw> = [
   path: '/admin',
   component: AdminPage,
 },
+
+{
+  path: '/profile',
+  component: ProfilePage,
+},
+
 ]
 
 const router = createRouter({

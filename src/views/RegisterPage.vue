@@ -87,8 +87,8 @@
                   class="register-input"
                   placeholder="Choose a username"
                   autocomplete="username"
-                  minlength="3"
-                  maxlength="30"
+                  :minlength="3"
+                  :maxlength="30"
                   pattern="[A-Za-z0-9_]+"
                   required
                 />
@@ -119,7 +119,7 @@
                   placeholder="At least 8 characters"
                   type="password"
                   autocomplete="new-password"
-                  minlength="8"
+                  :minlength="8"
                   required
                 />
                 <span class="field-hint">

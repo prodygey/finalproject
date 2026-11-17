@@ -23,7 +23,7 @@
         <nav class="topbar-links">
           <router-link to="/feed" class="nav-link active">
             <ion-icon :icon="newspaperOutline" />
-            Feed
+            Community
           </router-link>
 
           <router-link to="/books" class="nav-link">
@@ -42,11 +42,17 @@
             <ion-icon :icon="bookmarkOutline" />
             My Library
           </router-link>
+
+
+          <router-link to="/profile" class="nav-link">
+            <ion-icon :icon="personCircleOutline" />
+            My Profile
+          </router-link>
         </nav>
 
         <ion-button class="logout-button" fill="clear" @click="logout">
-          <ion-icon :icon="personCircleOutline" slot="start" />
-          Account
+          <ion-icon :icon="logOutOutline" slot="start" />
+          Logout
         </ion-button>
       </header>
 
@@ -87,10 +93,7 @@
           <div class="page-heading">
             <div>
               <p class="eyebrow">THE BOOKNEST COMMUNITY</p>
-              <h2>Your reading feed</h2>
-              <p class="heading-description">
-                A little inspiration from fellow readers and writers.
-              </p>
+              
             </div>
 
             <button
@@ -125,23 +128,38 @@
                 placeholder="What are you reading or thinking about today?"
                 :auto-grow="true"
                 :maxlength="2000"
-                rows="4"
+                :rows="4"
                 required
               />
 
               <div class="composer-bottom">
-                <div class="book-link-field">
+               <div class="book-link-field">
                   <ion-icon :icon="bookOutline" />
 
-                  <ion-input
-                    v-model="bookId"
-                    type="number"
-                    min="1"
-                    step="1"
-                    placeholder="Link a published book (optional)"
-                    aria-label="Published book ID, optional"
-                  />
+                  <ion-input v-model="bookSearch" type="text" placeholder="Search a book title (optional)"
+                    aria-label="Search published books" />
                 </div>
+
+                <!-- Display matching book suggestions. -->
+                <div v-if="bookSearch.trim() && !selectedBook" class="book-suggestions">
+                  <button v-for="book in filteredBooks" :key="book.id" type="button" class="book-suggestion"
+                    @click="selectBook(book)">
+                    {{ book.title }}
+                  </button>
+
+                  <p v-if="filteredBooks.length === 0" class="no-book-results">
+                    No matching books found.
+                  </p>
+                </div>
+
+                <!-- Display the selected book. -->
+                <p v-if="selectedBook" class="selected-book">
+                  <ion-icon :icon="bookOutline" />
+                  Selected: {{ selectedBook.title }}
+                  <button type="button" @click="clearBookSelection">
+                    Remove
+                  </button>
+                </p>
 
                 <ion-button
                   type="submit"
@@ -262,13 +280,9 @@
             </div>
 
             <div class="post-actions">
-              <button
-                class="post-action"
-                type="button"
-                @click="likePost(post.id)"
-              >
+              <button class="post-action" :class="{ 'liked': post.is_liked }" type="button" @click="toggleLike(post)">
                 <ion-icon :icon="heartOutline" />
-                Like
+                {{ post.is_liked ? 'Unlike' : 'Like' }}
               </button>
 
               <button
@@ -320,8 +334,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onMounted, ref } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 
 import {
   IonPage,
@@ -331,6 +345,7 @@ import {
   IonInput,
   IonTextarea,
   IonSpinner,
+  onIonViewWillEnter,
 } from '@ionic/vue';
 
 import {
@@ -367,17 +382,66 @@ type FeedPost = {
   like_count: number | string;
   comment_count: number | string;
   created_at: string;
+  is_liked: boolean;
+};
+
+// Book information used in the book selection suggestions.
+type BookOption = {
+  id: number;
+  title: string;
 };
 
 // Feed data, form values, and status messages.
 const posts = ref<FeedPost[]>([]);
 const postContent = ref('');
+
+// Book selection data.
+const books = ref<BookOption[]>([]);
+const bookSearch = ref('');
+const selectedBook = ref<BookOption | null>(null);
+
+
+  // Show books whose titles contain the search text.
+const filteredBooks = computed(() => {
+  const search = bookSearch.value.trim().toLowerCase();
+
+  if (!search) {
+    return [];
+  }
+
+  return books.value
+    .filter(book => book.title.toLowerCase().includes(search))
+    .slice(0, 8);
+});
+
+
+// Select a book from the search suggestions.
+function selectBook(book: BookOption) {
+  selectedBook.value = book;
+  bookSearch.value = book.title;
+
+  // Keep the actual book ID for the existing API.
+  bookId.value = String(book.id);
+}
+
+
+// Remove the selected book from the post.
+function clearBookSelection() {
+  selectedBook.value = null;
+  bookSearch.value = '';
+  bookId.value = '';
+}
+
+
+// Keep the actual book ID for the existing API.
 const bookId = ref('');
+
 const posting = ref(false);
 const loading = ref(false);
 const errorMessage = ref('');
 
 const router = useRouter();
+const route = useRoute();
 
 // Retrieve the current user's login token.
 function requireToken(): string {
@@ -405,6 +469,19 @@ async function loadFeed() {
     loading.value = false;
   }
 }
+
+
+// Load published books for the book-title search.
+async function loadBooks() {
+  try {
+    const result = await apiRequest<{ books: BookOption[] }>('/books');
+    books.value = result.books;
+  } catch (error) {
+    console.error('Could not load published books:', error);
+  }
+}
+
+
 
 // Publish a post and reload the feed.
 async function createPost() {
@@ -440,6 +517,8 @@ async function createPost() {
 
     postContent.value = '';
     bookId.value = '';
+    bookSearch.value = '';
+    selectedBook.value = null;
 
     await loadFeed();
   } catch (error) {
@@ -451,19 +530,37 @@ async function createPost() {
 }
 
 // Like a post and reload the updated engagement counts.
-async function likePost(id: number) {
+// Like or unlike a post depending on its current state.
+async function toggleLike(post: FeedPost) {
   errorMessage.value = '';
 
   try {
-    await apiRequest(`/posts/${id}/like`, {
-      method: 'POST',
-      token: requireToken(),
+    const token = requireToken();
+
+    // If already liked, send DELETE. Otherwise, send POST.
+    const method = post.is_liked ? 'DELETE' : 'POST';
+
+    await apiRequest(`/posts/${post.id}/like`, {
+      method,
+      token,
     });
 
-    await loadFeed();
+    // Update the displayed state immediately.
+    post.is_liked = !post.is_liked;
+
+    // Update the like count without reloading the entire feed.
+    const currentCount = Number(post.like_count) || 0;
+
+    post.like_count = Math.max(
+      0,
+      currentCount + (post.is_liked ? 1 : -1)
+    );
+
   } catch (error) {
     errorMessage.value =
-      error instanceof Error ? error.message : 'Could not like post.';
+      error instanceof Error
+        ? error.message
+        : 'Could not update your reaction.';
   }
 }
 
@@ -518,8 +615,65 @@ async function logout() {
   await router.push('/login');
 }
 
-// Load posts when the feed opens.
-onMounted(loadFeed);
+// Receive a selected quote from the book-reading page.
+function receiveSharedQuote() {
+  const getQueryValue = (value: unknown): string => {
+    return typeof value === 'string' ? value : '';
+  };
+
+  const quote = getQueryValue(route.query.quote);
+  const incomingBookId = getQueryValue(route.query.bookId);
+  const bookTitle = getQueryValue(route.query.bookTitle);
+  const chapterTitle = getQueryValue(route.query.chapterTitle);
+  const chapterNumber = getQueryValue(route.query.chapterNumber);
+
+  // Nothing to transfer if the reader did not share a quote.
+  if (!quote.trim() || !incomingBookId) return;
+
+  const parsedId = Number(incomingBookId);
+
+  if (!Number.isInteger(parsedId) || parsedId < 1) return;
+
+  // Automatically insert the quote and its original attribution.
+  postContent.value =
+    `“${quote}”\n\n` +
+    `— ${bookTitle || 'Unknown Book'}, ` +
+    `Chapter ${chapterNumber || '?'}: ${chapterTitle || 'Untitled'}\n\n`;
+
+  // Attach the original book to the post.
+  bookId.value = String(parsedId);
+
+  // Match the book against the published books already loaded.
+  const matchingBook = books.value.find(
+    book => book.id === parsedId
+  );
+
+  if (matchingBook) {
+    selectedBook.value = matchingBook;
+    bookSearch.value = matchingBook.title;
+  }
+
+  // Remove the quote parameters from the URL after receiving them.
+  router.replace({ path: '/feed' });
+}
+
+
+
+
+
+
+
+// Runs every time the Feed page becomes visible,
+// including when returning from the Read Book page.
+onIonViewWillEnter(async () => {
+  loadFeed();
+
+  // Load books before matching the shared book.
+  await loadBooks();
+
+  // Immediately insert the shared quote into the composer.
+  receiveSharedQuote();
+});
 </script>
 
 <style scoped>
@@ -1360,5 +1514,79 @@ onMounted(loadFeed);
   .post-stats {
     gap: 10px;
   }
+}
+
+
+
+
+
+/* Book title search suggestions */
+.book-suggestions {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+  margin-bottom: 12px;
+  background: #ffffff;
+  border: 1px solid #e5dce8;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(40, 20, 45, 0.08);
+}
+
+.book-suggestion {
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  border-bottom: 1px solid #f0eaf2;
+  background: transparent;
+  color: #38243f;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.book-suggestion:last-of-type {
+  border-bottom: none;
+}
+
+.book-suggestion:hover {
+  background: #f7f1f8;
+}
+
+.no-book-results {
+  margin: 0;
+  padding: 12px 14px;
+  color: #8b7c91;
+  font-size: 13px;
+}
+
+.selected-book {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f4edf6;
+  color: #55365f;
+  font-size: 13px;
+}
+
+.selected-book button {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: #8a456f;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.post-action.liked {
+  color: #a64269;
+  font-weight: 700;
+}
+
+.post-action.liked ion-icon {
+  color: #a64269;
 }
 </style>

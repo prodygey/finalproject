@@ -11,13 +11,27 @@ const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Purpose: Get the comments for a specific post.
+
+// Purpose: Get all comments and replies for a specific post,
+// including the username of the comment's direct parent.
 router.get('/posts/:postId/comments', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT c.id, c.content, c.created_at, u.id AS user_id, u.username
+      `SELECT
+          c.id,
+          c.post_id,
+          c.user_id,
+          c.parent_comment_id,
+          c.content,
+          c.created_at,
+          u.username,
+          parent_user.username AS parent_username
        FROM comments c
        JOIN users u ON u.id = c.user_id
+       LEFT JOIN comments parent_comment
+          ON parent_comment.id = c.parent_comment_id
+       LEFT JOIN users parent_user
+          ON parent_user.id = parent_comment.user_id
        WHERE c.post_id = $1
        ORDER BY c.created_at ASC`,
       [req.params.postId]
@@ -26,77 +40,249 @@ router.get('/posts/:postId/comments', async (req, res) => {
     res.json({ comments: result.rows });
   } catch (error) {
     console.error('Load comments error:', error.message);
-    res.status(500).json({ message: 'Could not load comments.' });
+    res.status(500).json({
+      message: 'Could not load comments.',
+    });
   }
 });
 
 // Purpose: Add a comment to a post using the authenticated account.
-router.post('/posts/:postId/comments', authenticateToken, async (req, res) => {
-  try {
-    const { content } = req.body;
+// Purpose: Add a regular comment or a reply to an existing comment.
+// Purpose: Add a regular comment or a reply and notify
+// everyone currently viewing this post.
+router.post(
+  '/posts/:postId/comments',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { content, parent_comment_id } = req.body;
+      const trimmedContent = content?.trim();
 
-    if (!content?.trim() || content.trim().length > 2000) {
-      return res.status(400).json({
-        message: 'Comment must contain 1–2000 characters.',
+      // Validate comment content.
+      if (!trimmedContent || trimmedContent.length > 2000) {
+        return res.status(400).json({
+          message: 'Comment must contain 1–2000 characters.',
+        });
+      }
+
+      // A missing parent ID means this is a regular comment.
+      const parentCommentId = parent_comment_id ?? null;
+
+      // Validate the parent if this is a reply.
+      if (parentCommentId !== null) {
+        if (!/^\d+$/.test(String(parentCommentId))) {
+          return res.status(400).json({
+            message: 'Invalid parent comment ID.',
+          });
+        }
+
+        const parent = await pool.query(
+          `SELECT id
+           FROM comments
+           WHERE id = $1
+             AND post_id = $2`,
+          [parentCommentId, req.params.postId]
+        );
+
+        if (parent.rows.length === 0) {
+          return res.status(404).json({
+            message: 'Parent comment not found.',
+          });
+        }
+      }
+
+      // Save the comment or reply in PostgreSQL.
+      const result = await pool.query(
+        `INSERT INTO comments
+          (post_id, user_id, content, parent_comment_id)
+         VALUES ($1, $2, $3, $4)
+         RETURNING
+           id,
+           post_id,
+           user_id,
+           content,
+           parent_comment_id,
+           created_at`,
+        [
+          req.params.postId,
+          req.user.id,
+          trimmedContent,
+          parentCommentId,
+        ]
+      );
+
+      // Retrieve the username of the newly created comment.
+      const commentResult = await pool.query(
+        `SELECT
+            c.id,
+            c.post_id,
+            c.user_id,
+            c.parent_comment_id,
+            c.content,
+            c.created_at,
+            u.username,
+            parent_user.username AS parent_username
+         FROM comments c
+         JOIN users u ON u.id = c.user_id
+         LEFT JOIN comments parent_comment
+            ON parent_comment.id = c.parent_comment_id
+         LEFT JOIN users parent_user
+            ON parent_user.id = parent_comment.user_id
+         WHERE c.id = $1`,
+        [result.rows[0].id]
+      );
+
+      const newComment = commentResult.rows[0];
+
+      // Count comments and replies for the post.
+      const countResult = await pool.query(
+        `SELECT COUNT(*) AS comment_count
+         FROM comments
+         WHERE post_id = $1`,
+        [req.params.postId]
+      );
+
+      // Notify other users viewing this post.
+      const io = req.app.get('io');
+
+      if (io) {
+        io.to(`post-${req.params.postId}`).emit('comment-created', {
+          postId: Number(req.params.postId),
+          comment: newComment,
+          comment_count: Number(countResult.rows[0].comment_count),
+        });
+      }
+
+      // Return the saved comment to the person who submitted it.
+      res.status(201).json({
+        message: parentCommentId
+          ? 'Reply added.'
+          : 'Comment added.',
+        comment: newComment,
+        comment_count: Number(countResult.rows[0].comment_count),
+      });
+
+    } catch (error) {
+      if (error.code === '23503') {
+        return res.status(404).json({
+          message: 'Post or parent comment not found.',
+        });
+      }
+
+      console.error('Add comment error:', error.message);
+
+      res.status(500).json({
+        message: 'Could not add comment.',
       });
     }
-
-    const result = await pool.query(
-      `INSERT INTO comments (post_id, user_id, content)
-       VALUES ($1, $2, $3)
-       RETURNING id, post_id, user_id, content, created_at`,
-      [req.params.postId, req.user.id, content.trim()]
-    );
-
-    res.status(201).json({
-      message: 'Comment added.',
-      comment: result.rows[0],
-    });
-  } catch (error) {
-    if (error.code === '23503') {
-      return res.status(404).json({ message: 'Post not found.' });
-    }
-
-    console.error('Add comment error:', error.message);
-    res.status(500).json({ message: 'Could not add comment.' });
   }
-});
+);
 
 // Purpose: Like a post; the composite key prevents repeated likes.
-router.post('/posts/:postId/like', authenticateToken, async (req, res) => {
-  try {
-    await pool.query(
-      `INSERT INTO post_likes (post_id, user_id)
-       VALUES ($1, $2)
-       ON CONFLICT (post_id, user_id) DO NOTHING`,
-      [req.params.postId, req.user.id]
-    );
+// Purpose: Like a post and broadcast its updated like count.
+router.post(
+  '/posts/:postId/like',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      await pool.query(
+        `INSERT INTO post_likes (post_id, user_id)
+         VALUES ($1, $2)
+         ON CONFLICT (post_id, user_id) DO NOTHING`,
+        [req.params.postId, req.user.id]
+      );
 
-    res.json({ message: 'Post liked.' });
-  } catch (error) {
-    if (error.code === '23503') {
-      return res.status(404).json({ message: 'Post not found.' });
+      // Get the latest like count.
+      const countResult = await pool.query(
+        `SELECT COUNT(*) AS like_count
+         FROM post_likes
+         WHERE post_id = $1`,
+        [req.params.postId]
+      );
+
+      const likeCount = Number(countResult.rows[0].like_count);
+
+      // Notify users viewing this post.
+      const io = req.app.get('io');
+
+      if (io) {
+        io.to(`post-${req.params.postId}`).emit('reaction-updated', {
+          postId: Number(req.params.postId),
+          like_count: likeCount,
+        });
+      }
+
+      res.json({
+        message: 'Post liked.',
+        like_count: likeCount,
+        is_liked: true,
+      });
+
+    } catch (error) {
+      if (error.code === '23503') {
+        return res.status(404).json({
+          message: 'Post not found.',
+        });
+      }
+
+      console.error('Like error:', error.message);
+
+      res.status(500).json({
+        message: 'Could not like post.',
+      });
     }
-
-    console.error('Like error:', error.message);
-    res.status(500).json({ message: 'Could not like post.' });
   }
-});
+);
 
 // Purpose: Remove the current user's like from a post.
-router.delete('/posts/:postId/like', authenticateToken, async (req, res) => {
-  try {
-    await pool.query(
-      'DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2',
-      [req.params.postId, req.user.id]
-    );
+// Purpose: Unlike a post and broadcast its updated like count.
+router.delete(
+  '/posts/:postId/like',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      await pool.query(
+        `DELETE FROM post_likes
+         WHERE post_id = $1
+           AND user_id = $2`,
+        [req.params.postId, req.user.id]
+      );
 
-    res.json({ message: 'Post unliked.' });
-  } catch (error) {
-    console.error('Unlike error:', error.message);
-    res.status(500).json({ message: 'Could not unlike post.' });
+      // Get the latest like count.
+      const countResult = await pool.query(
+        `SELECT COUNT(*) AS like_count
+         FROM post_likes
+         WHERE post_id = $1`,
+        [req.params.postId]
+      );
+
+      const likeCount = Number(countResult.rows[0].like_count);
+
+      // Notify users viewing this post.
+      const io = req.app.get('io');
+
+      if (io) {
+        io.to(`post-${req.params.postId}`).emit('reaction-updated', {
+          postId: Number(req.params.postId),
+          like_count: likeCount,
+        });
+      }
+
+      res.json({
+        message: 'Post unliked.',
+        like_count: likeCount,
+        is_liked: false,
+      });
+
+    } catch (error) {
+      console.error('Unlike error:', error.message);
+
+      res.status(500).json({
+        message: 'Could not unlike post.',
+      });
+    }
   }
-});
+);
 
 // Purpose: Save a published book to the logged-in user's library.
 router.post('/library/:bookId', authenticateToken, async (req, res) => {

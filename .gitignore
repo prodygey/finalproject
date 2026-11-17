@@ -48,3 +48,11 @@ npm-debug.log*
 # Temporary files
 *.bak
 *.tmp
+
+# Uploaded user files
+/backend/uploads/
+
+# User-uploaded files
+/backend/uploads/covers/
+/backend/uploads/music/
+/backend/uploads/profile/

@@ -121,8 +121,8 @@ Use BookNest's cream and plum editorial design.
             </div>
 
             <span class="count-badge">
-              {{ comments.length }}
-              {{ comments.length === 1 ? 'comment' : 'comments' }}
+              {{ totalCommentCount }}
+              {{ totalCommentCount === 1 ? 'comment' : 'comments' }}
             </span>
           </div>
 
@@ -142,24 +142,89 @@ Use BookNest's cream and plum editorial design.
           </div>
 
           <div v-else class="comment-list">
-            <article
-              v-for="comment in comments"
-              :key="comment.id"
-              class="comment-card"
-            >
+            <!-- Original comments -->
+            <article v-for="comment in comments" :key="comment.id" class="comment-card">
+              <!-- Original comment avatar -->
               <div class="avatar">
                 {{ (comment.username || 'U').charAt(0).toUpperCase() }}
               </div>
 
               <div class="comment-body">
+
+                <!-- Original comment information -->
                 <div class="comment-meta">
                   <strong>
                     @{{ comment.username || 'Unknown user' }}
                   </strong>
+
                   <span>{{ formatDate(comment.created_at) }}</span>
                 </div>
 
                 <p class="comment-text">{{ comment.content }}</p>
+
+                <button class="reply-button" type="button" @click="toggleReply(comment.id)">
+                  {{ String(replyingTo) === String(comment.id) ? 'Cancel reply' : 'Reply' }}
+                </button>
+
+                <!-- Reply form for original comment -->
+                <form v-if="String(replyingTo) === String(comment.id)" class="reply-form"
+                  @submit.prevent="addReply(comment.id)">
+                  <ion-textarea v-model="replyContent" placeholder="Write your reply..." :auto-grow="true"
+                    :maxlength="2000" :disabled="submittingReply" required />
+
+                  <ion-button class="reply-submit" type="submit" size="small"
+                    :disabled="submittingReply || !replyContent.trim()">
+                    {{ submittingReply ? 'Sending...' : 'Post reply' }}
+                  </ion-button>
+                </form>
+
+                <!-- All replies are displayed at the same indentation level -->
+                <div v-if="comment.replies && comment.replies.length" class="replies-list">
+                  <div v-for="reply in comment.replies" :key="reply.id" class="reply-card">
+                    <!-- Reply avatar -->
+                    <div class="avatar reply-avatar">
+                      {{ (reply.username || 'U').charAt(0).toUpperCase() }}
+                    </div>
+
+                    <div class="comment-body">
+
+                      <!-- Reply information -->
+                      <div class="comment-meta">
+                        <strong>
+                          @{{ reply.username || 'Unknown user' }}
+                        </strong>
+
+                        <span>{{ formatDate(reply.created_at) }}</span>
+                      </div>
+
+                      <!-- Show who the reply is directed to -->
+                      <small v-if="reply.parent_username" class="reply-context">
+                        Replying to @{{ reply.parent_username }}
+                      </small>
+
+                      <p class="comment-text">{{ reply.content }}</p>
+
+                      <!-- Reply button for another reply -->
+                      <button class="reply-button" type="button" @click="toggleReply(reply.id)">
+                        {{ String(replyingTo) === String(reply.id) ? 'Cancel reply' : 'Reply' }}
+                      </button>
+
+                      <!-- Reply form for another reply -->
+                      <form v-if="String(replyingTo) === String(reply.id)" class="reply-form"
+                        @submit.prevent="addReply(reply.id)">
+                        <ion-textarea v-model="replyContent" placeholder="Write your reply..." :auto-grow="true"
+                          :maxlength="2000" :disabled="submittingReply" required />
+
+                        <ion-button class="reply-submit" type="submit" size="small"
+                          :disabled="submittingReply || !replyContent.trim()">
+                          {{ submittingReply ? 'Sending...' : 'Post reply' }}
+                        </ion-button>
+                      </form>
+
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </article>
           </div>
@@ -189,9 +254,18 @@ Use BookNest's cream and plum editorial design.
 </template>
 
 <script setup lang="ts">
-// Purpose: Import Vue state, router tools, Ionic components, and icons.
-import { onMounted, ref } from 'vue';
+
+/*
+Purpose:
+- Display comments and replies.
+- Allow authenticated users to submit comments and replies.
+- Automatically receive new comments and replies using Socket.IO.
+- Keep all replies aligned under their original comment.
+*/
+
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { io, type Socket } from 'socket.io-client';
 
 import {
   IonPage,
@@ -200,6 +274,7 @@ import {
   IonButton,
   IonIcon,
   IonSpinner,
+  onIonViewWillEnter,
 } from '@ionic/vue';
 
 import {
@@ -219,29 +294,65 @@ import {
 import { apiRequest } from '../services/api';
 import { getToken } from '../services/session';
 
-// Purpose: Describe the comment data returned by the backend.
+// Change this if your backend uses another host or port.
+const SOCKET_URL = 'http://localhost:3000';
+
+
+
+
+
 type CommentItem = {
   id: number | string;
   content: string;
   username: string;
+  user_id?: number | string;
   created_at: string;
+  parent_comment_id: number | string | null;
+  parent_username?: string | null;
+  replies: CommentItem[];
 };
 
-// Purpose: Access the post ID from the current URL.
+type CommentCreatedEvent = {
+  postId: number | string;
+  comment: CommentItem;
+  comment_count: number;
+};
+
+// Get the post ID from the URL.
 const route = useRoute();
 const router = useRouter();
 
 const postId = String(route.params.id ?? '');
 
-// Purpose: Track comments, form content, loading, and feedback.
+// Page state.
 const comments = ref<CommentItem[]>([]);
 const content = ref('');
+const replyContent = ref('');
+const replyingTo = ref<number | string | null>(null);
+
 const errorMessage = ref('');
 const successMessage = ref('');
+
 const loading = ref(false);
 const submitting = ref(false);
+const submittingReply = ref(false);
 
-// Purpose: Load comments belonging to the selected post.
+// Socket connection.
+let commentSocket: Socket | null = null;
+
+// Count original comments and all replies.
+const totalCommentCount = computed(() => {
+  return comments.value.reduce(
+    (total, comment) => total + 1 + comment.replies.length,
+    0
+  );
+});
+
+
+
+
+
+// Load comments from PostgreSQL and organize replies.
 async function loadComments() {
   if (!postId) {
     errorMessage.value = 'The post ID is missing from the URL.';
@@ -256,7 +367,63 @@ async function loadComments() {
       `/posts/${postId}/comments`
     );
 
-    comments.value = result.comments ?? [];
+    const allComments = result.comments ?? [];
+
+    // Create comment objects with their own replies arrays.
+    const commentItems: CommentItem[] = allComments.map(comment => ({
+      ...comment,
+      replies: [],
+    }));
+
+    // Create a map for finding comments by ID.
+    const commentMap = new Map<string, CommentItem>();
+
+    commentItems.forEach(comment => {
+      commentMap.set(String(comment.id), comment);
+    });
+
+    const rootComments: CommentItem[] = [];
+
+    // Organize original comments and replies.
+    commentItems.forEach(comment => {
+      if (comment.parent_comment_id === null) {
+        rootComments.push(comment);
+        return;
+      }
+
+      // Find the direct parent.
+      const parent = commentMap.get(
+        String(comment.parent_comment_id)
+      );
+
+      comment.parent_username = parent?.username ?? null;
+
+      // Find the original comment, even for nested replies.
+      let root = parent;
+      const visited = new Set<string>();
+
+      while (
+        root &&
+        root.parent_comment_id !== null &&
+        !visited.has(String(root.id))
+      ) {
+        visited.add(String(root.id));
+
+        root = commentMap.get(
+          String(root.parent_comment_id)
+        );
+      }
+
+      // Place every reply under its original comment.
+      if (root && String(root.id) !== String(comment.id)) {
+        root.replies.push(comment);
+      } else if (!parent) {
+        rootComments.push(comment);
+      }
+    });
+
+    comments.value = rootComments;
+
   } catch (error) {
     errorMessage.value =
       error instanceof Error
@@ -267,7 +434,64 @@ async function loadComments() {
   }
 }
 
-// Purpose: Submit a comment using the logged-in user's token.
+// Receive new comments and replies from the backend.
+function handleCommentCreated(data: CommentCreatedEvent) {
+  // Only update the page if the event belongs to this post.
+  if (String(data.postId) !== postId) {
+    return;
+  }
+
+  console.log('New real-time comment received:', data.comment);
+
+  // Reload the latest comments from PostgreSQL.
+  // This also prevents duplicate comments from appearing.
+  loadComments();
+}
+
+// Connect to the Socket.IO server.
+function connectToComments() {
+  if (!postId) return;
+
+  commentSocket = io(SOCKET_URL);
+
+  commentSocket.on('connect', () => {
+    console.log('BookNest real-time connection established.');
+
+    // Join the room for the current post.
+    commentSocket?.emit('join-post', postId);
+
+    console.log(`Joined comment room for post ${postId}`);
+  });
+
+  // Listen for new comments and replies.
+  commentSocket.on('comment-created', (data) => {
+  if (String(data.postId) !== postId) return;
+
+  // Reload the comments automatically when a new comment or reply arrives.
+  loadComments();
+});
+
+  commentSocket.on('connect_error', (error) => {
+    console.error('Socket connection failed:', error.message);
+  });
+
+  commentSocket.on('disconnect', (reason) => {
+    console.log('Socket disconnected:', reason);
+  });
+}
+
+// Disconnect when leaving the comments page.
+function disconnectFromComments() {
+  if (!commentSocket) return;
+
+  commentSocket.emit('leave-post', postId);
+  commentSocket.off('comment-created', handleCommentCreated);
+  commentSocket.disconnect();
+
+  commentSocket = null;
+}
+
+// Submit a new original comment.
 async function addComment() {
   const token = getToken();
   const trimmedContent = content.value.trim();
@@ -302,7 +526,9 @@ async function addComment() {
     content.value = '';
     successMessage.value = 'Your comment has been posted.';
 
+    // Update the current user's screen immediately.
     await loadComments();
+
   } catch (error) {
     errorMessage.value =
       error instanceof Error
@@ -313,7 +539,74 @@ async function addComment() {
   }
 }
 
-// Purpose: Format timestamps for readable display.
+// Open or close a reply form.
+function toggleReply(commentId: number | string) {
+  if (String(replyingTo.value) === String(commentId)) {
+    replyingTo.value = null;
+  } else {
+    replyingTo.value = commentId;
+  }
+
+  replyContent.value = '';
+  errorMessage.value = '';
+  successMessage.value = '';
+}
+
+// Submit a reply to an existing comment or another reply.
+async function addReply(parentCommentId: number | string) {
+  const token = getToken();
+  const trimmedContent = replyContent.value.trim();
+
+  errorMessage.value = '';
+  successMessage.value = '';
+
+  if (!token) {
+    errorMessage.value = 'Please sign in before replying.';
+    return;
+  }
+
+  if (!trimmedContent) {
+    errorMessage.value = 'Please enter a reply first.';
+    return;
+  }
+
+  if (trimmedContent.length > 2000) {
+    errorMessage.value = 'Your reply must be 2000 characters or fewer.';
+    return;
+  }
+
+  submittingReply.value = true;
+
+  try {
+    await apiRequest(`/posts/${postId}/comments`, {
+      method: 'POST',
+      token,
+      body: {
+        content: trimmedContent,
+        parent_comment_id: parentCommentId,
+      },
+    });
+
+    replyContent.value = '';
+    replyingTo.value = null;
+
+    successMessage.value = 'Your reply has been posted.';
+
+    await loadComments();
+
+  } catch (error) {
+    console.error('Reply submission failed:', error);
+
+    errorMessage.value =
+      error instanceof Error
+        ? error.message
+        : 'Could not post your reply.';
+  } finally {
+    submittingReply.value = false;
+  }
+}
+
+// Format comment timestamps.
 function formatDate(value: string) {
   const date = new Date(value);
 
@@ -327,14 +620,23 @@ function formatDate(value: string) {
   });
 }
 
-// Purpose: Return to the community feed.
+// Return to the community feed.
 function goToFeed() {
   router.push('/feed');
 }
 
-// Purpose: Load the existing comments when the page opens.
-onMounted(loadComments);
+// Load comments and establish the real-time connection.
+onMounted(() => {
+  loadComments();
+  connectToComments();
+});
+
+// Clean up the connection when leaving the page.
+onBeforeUnmount(() => {
+  disconnectFromComments();
+});
 </script>
+
 
 <style scoped>
 .comments-content {
@@ -820,5 +1122,89 @@ onMounted(loadComments);
     align-items: flex-start;
     flex-direction: column;
   }
+}
+
+/* Reply button */
+.reply-button {
+  margin-top: 10px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #805777;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.reply-button:hover {
+  color: #4b2947;
+}
+
+/* Reply form */
+.reply-form {
+  margin-top: 13px;
+  padding: 13px;
+  border: 1px solid #e9dfd5;
+  border-radius: 11px;
+  background: #faf6f0;
+}
+
+.reply-form ion-textarea {
+  --background: #fffdf8;
+  --color: #493747;
+  --border-radius: 8px;
+  --padding-start: 10px;
+  --padding-end: 10px;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+}
+
+.reply-submit {
+  --background: #4b2947;
+  --color: #fff8ef;
+  --border-radius: 8px;
+  margin-top: 9px;
+  font-size: 11px;
+}
+
+/* All replies share the same indentation */
+.replies-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 15px;
+  margin-left: 42px;
+  padding-left: 0;
+  border-left: none;
+}
+
+/* Every reply has the same horizontal alignment */
+.reply-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  margin-left: 0;
+  padding: 12px;
+  border: 1px solid #eee3eb;
+  border-radius: 11px;
+  background: #f8f3f7;
+  box-sizing: border-box;
+}
+
+.reply-avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 13px;
+}
+
+/* Shows which user the reply is directed to */
+.reply-context {
+  display: block;
+  margin-top: 5px;
+  color: #98768f;
+  font-family: Arial, sans-serif;
+  font-size: 10px;
 }
 </style>
