@@ -20,6 +20,31 @@ const adminRoutes = require('./routes/admin');
 // Purpose: Create the Express application.
 const app = express();
 
+
+// TEMPORARY: Log incoming requests from the web and Android app.
+// Purpose: Log incoming requests and their final response status.
+app.use((req, res, next) => {
+  console.log(
+    `[REQUEST] ${req.method} ${req.originalUrl} | Origin: ${req.headers.origin || 'No origin'}`
+  );
+
+  // Log the response after Express finishes processing the request.
+  res.on('finish', () => {
+    console.log(
+      `[RESPONSE] ${req.method} ${req.originalUrl} | Status: ${res.statusCode}`
+    );
+  });
+
+  next();
+});
+
+
+// Purpose: Prevent cached API responses during development.
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+
 // Purpose: Create an HTTP server that Socket.IO and Express can share.
 const server = http.createServer(app);
 
@@ -121,7 +146,7 @@ async function startServer() {
 
     // Listen on all network interfaces so Android devices can connect.
     server.listen(PORT, '0.0.0.0', () => {
-      console.log(`BookNest API running at http://192.168.1.5:${PORT}`);
+      console.log(`BookNest API running at http://172.20.10.6:${PORT}`);
       console.log('PostgreSQL connection successful.');
       console.log('Socket.IO server is ready.');
     });

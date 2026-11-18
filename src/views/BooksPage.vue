@@ -23,7 +23,7 @@
         <nav class="topbar-links">
           <router-link to="/feed" class="nav-link">
             <ion-icon :icon="newspaperOutline" />
-            Community
+            Feed
           </router-link>
 
           <router-link to="/books" class="nav-link active">

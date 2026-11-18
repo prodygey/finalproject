@@ -1,12 +1,17 @@
-const { Pool } = require("pg");
+
+// Purpose: Load environment variables from backend/.env.
 require("dotenv").config();
 
+// Purpose: Import PostgreSQL connection pool.
+const { Pool } = require("pg");
+
+// Purpose: Connect to Neon using its secure connection string.
 const pool = new Pool({
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
 
+// Purpose: Export the pool for database queries.
 module.exports = pool;

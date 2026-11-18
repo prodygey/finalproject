@@ -23,7 +23,7 @@
         <nav class="topbar-links">
           <router-link to="/feed" class="nav-link active">
             <ion-icon :icon="newspaperOutline" />
-            Community
+            Feed
           </router-link>
 
           <router-link to="/books" class="nav-link">
@@ -1394,11 +1394,13 @@ onIonViewWillEnter(async () => {
   }
 }
 
+/* Mobile responsive layout */
 @media (max-width: 700px) {
   .topbar {
     flex-wrap: wrap;
     gap: 10px;
-    padding: 12px 17px;
+    padding: 12px 12px;
+    box-sizing: border-box;
   }
 
   .brand {
@@ -1407,21 +1409,31 @@ onIonViewWillEnter(async () => {
 
   .topbar-links {
     order: 3;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     width: 100%;
-    justify-content: space-between;
-    gap: 3px;
+    min-width: 0;
+    gap: 2px;
     padding-top: 8px;
     border-top: 1px solid #eee5eb;
+    box-sizing: border-box;
   }
 
   .nav-link {
-    gap: 5px;
-    padding: 8px;
-    font-size: 11px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 0;
+    padding: 8px 2px;
+    font-size: 9px;
+    text-align: center;
+    white-space: nowrap;
   }
 
   .nav-link ion-icon {
-    font-size: 15px;
+    font-size: 18px;
   }
 
   .logout-button {
@@ -1430,6 +1442,8 @@ onIonViewWillEnter(async () => {
 
   .feed-layout {
     display: block;
+    width: 100%;
+    box-sizing: border-box;
     padding: 25px 15px 35px;
   }
 
@@ -1589,4 +1603,6 @@ onIonViewWillEnter(async () => {
 .post-action.liked ion-icon {
   color: #a64269;
 }
+
+
 </style>

@@ -17,7 +17,7 @@
         </button>
 
         <nav class="header-nav">
-          <button class="nav-link" @click="goToFeed">Community</button>
+          <button class="nav-link" @click="goToFeed">Feed</button>
           <button class="nav-link" @click="goToDiscover">Discover</button>
           <button class="nav-link" @click="goToWrite">Write</button>
           <button class="nav-link active">My Library</button>

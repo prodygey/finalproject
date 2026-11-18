@@ -87,7 +87,7 @@
                 v-if="chapters.length"
                 class="primary-button"
                 @click="readChapter(chapters[0].id)"
-                :disabled="isReading"
+                :disabled="isReading || isLoading"
               >
                 <ion-icon :icon="bookOutline" />
                 {{ isReading ? 'Opening chapter...' : selectedChapter ? 'Continue Reading' : 'Start Reading' }}
@@ -122,7 +122,7 @@
                 class="chapter-row"
                 :class="{ 'chapter-active': selectedChapter?.id === chapter.id }"
                 @click="readChapter(chapter.id)"
-                :disabled="isReading"
+                :disabled="isReading || isLoading"
               >
                 <span class="chapter-number">
                   {{ String(chapter.chapter_number).padStart(2, '0') }}
@@ -154,18 +154,11 @@
   </div>
 
   <!-- Show only if the browser blocks automatic playback -->
-  <button
-    v-if="needsMusicPermission"
-    class="music-button"
-    @click="enableMusic"
-  >
-    <ion-icon :icon="bookOutline" />
-    Tap to enable music
-  </button>
+ 
 
   <!-- Mute and unmute control -->
   <button
-    v-else
+    
     class="music-button"
     @click="toggleMute"
   >
@@ -339,6 +332,10 @@ const needsMusicPermission = ref(false);
 const musicError = ref('');
 
 // Retrieve and play music based on the book's genre.
+
+// Retrieve and prepare background music based on the book's genre.
+// Do not play it here. Playback will start when the reader taps Start Reading.
+
 async function loadGenreMusic() {
   try {
     const id = String(route.params.id);
@@ -348,39 +345,98 @@ async function loadGenreMusic() {
       music: GenreMusic;
     }>(`/books/${id}/music`);
 
-    // Stop any previously loaded music.
+    console.log('MUSIC API RESULT:', result);
+    console.log('MUSIC URL FROM API:', result?.music?.music_url);
+
+    if (!result?.music?.music_url) {
+      throw new Error('The music API did not return a music URL.');
+    }
+
+    // Stop previously loaded music.
     if (audioPlayer.value) {
       audioPlayer.value.pause();
       audioPlayer.value = null;
     }
 
-    // Use the backend URL for the music file.
+    // Build the full music URL using the backend address.
     const musicUrl = new URL(
       result.music.music_url,
-      'http://192.168.1.5:3000'
+      'http://172.20.10.6:3000'
     ).toString();
 
+    // Prepare the audio player.
     const audio = new Audio(musicUrl);
 
     audio.loop = true;
     audio.muted = isMuted.value;
+    audio.preload = 'auto';
 
     audioPlayer.value = audio;
 
-    // Attempt automatic playback.
-    try {
-      await audio.play();
-      needsMusicPermission.value = false;
-    } catch {
-      // Browser blocked autoplay.
-      needsMusicPermission.value = true;
-    }
+    // Load the audio file without starting playback.
+    audio.load();
+
+    needsMusicPermission.value = false;
+    musicError.value = '';
+
+    console.log('Background music prepared:', musicUrl);
 
   } catch (error) {
-    console.error('Could not load genre music:', error);
+    console.error('COULD NOT LOAD GENRE MUSIC:', error);
     musicError.value = 'Background music is unavailable.';
   }
 }
+
+
+
+
+// Start music directly from the reader's button interaction.
+
+function startGenreMusic() {
+  if (!audioPlayer.value) {
+    console.warn('Background music has not been prepared.');
+    return;
+  }
+
+  const audio = audioPlayer.value;
+
+  audio.muted = isMuted.value;
+
+  // Log audio loading and playback errors.
+  audio.addEventListener('error', () => {
+    console.error('AUDIO FILE ERROR:', {
+      code: audio.error?.code,
+      message: audio.error?.message,
+      networkState: audio.networkState,
+      readyState: audio.readyState
+    });
+  });
+
+  console.log('AUDIO PLAYBACK START:', {
+    url: audio.src,
+    readyState: audio.readyState,
+    networkState: audio.networkState,
+    muted: audio.muted
+  });
+
+  // Attempt playback.
+  audio.play()
+    .then(() => {
+      needsMusicPermission.value = false;
+      console.log('Background music is playing.');
+    })
+    .catch((error: DOMException) => {
+      needsMusicPermission.value = true;
+
+      console.error('BACKGROUND MUSIC PLAY ERROR:', {
+        name: error.name,
+        message: error.message,
+        code: error.code
+      });
+    });
+}
+
+
 
 // Enable music after the reader taps the permission button.
 async function enableMusic() {
@@ -488,7 +544,7 @@ async function loadBook() {
 
     book.value = result.book;
     chapters.value = result.chapters;
-    //await loadGenreMusic();
+    await loadGenreMusic();
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : 'Could not load this book.';
@@ -502,12 +558,11 @@ async function readChapter(chapterId: number) {
   if (isReading.value) return;
 
   isReading.value = true;
-  errorMessage.value = '';
+errorMessage.value = '';
 
-  // Load background music only when the reader starts reading.
-  if (!audioPlayer.value) {
-    await loadGenreMusic();
-  }
+// Start music immediately from the reader's tap.
+// Do this before awaiting the chapter API request.
+startGenreMusic();
 
   try {
     const id = String(route.params.id);

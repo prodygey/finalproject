@@ -56,3 +56,5 @@ npm-debug.log*
 /backend/uploads/covers/
 /backend/uploads/music/
 /backend/uploads/profile/
+# Database backups
+*.backup

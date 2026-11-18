@@ -23,7 +23,7 @@ Use BookNest's cream and plum editorial design.
           <nav class="navigation">
             <router-link to="/feed" class="nav-link active">
               <ion-icon :icon="newspaperOutline" />
-              Community
+              Feed
             </router-link>
 
             <router-link to="/books" class="nav-link">
@@ -295,7 +295,7 @@ import { apiRequest } from '../services/api';
 import { getToken } from '../services/session';
 
 // Change this if your backend uses another host or port.
-const SOCKET_URL = 'http://192.168.1.5:3000';
+const SOCKET_URL = 'http://172.20.10.6:3000';
 
 
 
